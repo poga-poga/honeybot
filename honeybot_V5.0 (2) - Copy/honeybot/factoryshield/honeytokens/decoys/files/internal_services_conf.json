@@ -1,0 +1,10 @@
+{
+    "enterprise": "Jordan Industrial Manufacturing (JIM)",
+    "internal_cad_vault": "https://cad-srv01.jim.corp:8443/vault",
+    "ot_production_gateway": "192.168.30.80:502",
+    "api_service_keys": {
+        "comment": "Internal service authentication token - DO NOT SHARE",
+        "active_key": "JIM-CANARY-APIKEY-4f9a0c1e8b2d-PROD-VAULT",
+        "client_id": "svc_eng_backup"
+    }
+}

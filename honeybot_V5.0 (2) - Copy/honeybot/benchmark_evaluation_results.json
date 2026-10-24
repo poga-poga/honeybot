@@ -1,0 +1,286 @@
+{
+    "total_scenarios": 100,
+    "distribution": {
+        "normal_authorized": 40,
+        "privilege_abuse": 20,
+        "decoy_access": 15,
+        "data_exfiltration": 15,
+        "lateral_movement": 10
+    },
+    "comparison": {
+        "baseline_isolated": {
+            "TP": 57,
+            "FP": 10,
+            "TN": 30,
+            "FN": 3,
+            "precision": 85.07,
+            "recall": 95.0,
+            "f1_score": 89.76,
+            "false_positive_rate": 25.0,
+            "avg_detection_time_ms": 0.004
+        },
+        "factoryshield_correlated": {
+            "TP": 60,
+            "FP": 0,
+            "TN": 40,
+            "FN": 0,
+            "precision": 100.0,
+            "recall": 100.0,
+            "f1_score": 100.0,
+            "false_positive_rate": 0.0,
+            "avg_detection_time_ms": 0.044
+        }
+    },
+    "detailed_runs": [
+        {
+            "scenario_id": "SCEN-NORM-001",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": true,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-002",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-003",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-004",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-005",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": true,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-006",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-007",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-008",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-009",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": true,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-010",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-011",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-012",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-013",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": true,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-014",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-015",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-016",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-017",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": true,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-018",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-019",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-020",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-021",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": true,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-022",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-023",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-024",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": false,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        },
+        {
+            "scenario_id": "SCEN-NORM-025",
+            "type": "Normal Authorized Activity",
+            "is_malicious": false,
+            "baseline_alert": true,
+            "factoryshield_alert": false,
+            "factoryshield_score": 0,
+            "factoryshield_severity": "Low",
+            "rules_triggered": []
+        }
+    ]
+}
