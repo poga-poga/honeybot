@@ -101,6 +101,19 @@ def api_honeytokens():
         for t in tokens
     ])
 
+def redact_sensitive_fields(value):
+    """Return API-safe data without raw passwords or credential secrets."""
+    if isinstance(value, dict):
+        return {
+            key: redact_sensitive_fields(item)
+            for key, item in value.items()
+            if key.lower() not in {"password", "captured_password", "credential_value", "secret"}
+        }
+    if isinstance(value, list):
+        return [redact_sensitive_fields(item) for item in value]
+    return value
+
+
 @app.route("/api/credentials")
 def api_credentials():
     creds = []
@@ -110,23 +123,22 @@ def api_credentials():
                 "incident_id": inc["incident_id"],
                 "timestamp": inc["timestamp"],
                 "username": inc["actor"],
-                "password": inc["captured_password"],
-                "service": inc.get("service_name", "Decoy Trap"),
+                                "service": inc.get("service_name", "Decoy Trap"),
                 "source_host": inc.get("source_workstation", "Unknown"),
                 "severity": inc.get("severity", "Medium"),
                 "severity_ar": inc.get("severity_ar", "متوسط")
             })
-    return jsonify(creds)
+    return jsonify([redact_sensitive_fields(cred) for cred in creds])
 
 @app.route("/api/incidents")
 def api_incidents():
-    return jsonify(detector_engine.incidents_history)
+    return jsonify(redact_sensitive_fields(detector_engine.incidents_history))
 
 @app.route("/api/incidents/<incident_id>")
 def api_incident_detail(incident_id):
     for inc in detector_engine.incidents_history:
         if inc["incident_id"] == incident_id:
-            return jsonify(inc)
+            return jsonify(redact_sensitive_fields(inc))
     return jsonify({"error": "Incident not found"}), 404
 
 @app.route("/api/simulate/<scenario_type>", methods=["POST"])
