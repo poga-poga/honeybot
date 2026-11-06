@@ -123,7 +123,7 @@ def api_credentials():
                 "incident_id": inc["incident_id"],
                 "timestamp": inc["timestamp"],
                 "username": inc["actor"],
-                                "service": inc.get("service_name", "Decoy Trap"),
+                "service": inc.get("service_name", "Decoy Trap"),
                 "source_host": inc.get("source_workstation", "Unknown"),
                 "severity": inc.get("severity", "Medium"),
                 "severity_ar": inc.get("severity_ar", "متوسط")
