@@ -2,6 +2,13 @@
  * FactoryShield Interactive Dashboard Controller (English Edition)
  */
 
+// Escape untrusted API values before inserting them into HTML.
+function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"\']/g, char => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\\"": "&quot;", "\\\'": "&#39;"
+    }[char]));
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     loadStats();
     loadTopology();
@@ -69,20 +76,20 @@ async function loadTopology() {
                 const isCanaryAsset = hName.toLowerCase().includes("cad") || hName.toLowerCase().includes("repo") || hName.toLowerCase().includes("plc");
                 const pillClass = isCanaryAsset ? "host-pill has-canary" : "host-pill";
                 hostPillsHtml += `
-                    <div class="${pillClass}" title="${hInfo.ip} | ${hInfo.type || hInfo.dept}">
+                    <div class="${pillClass}" title="${escapeHTML(hInfo.ip)} | ${escapeHTML(hInfo.type || hInfo.dept)}">
                         <span>${isCanaryAsset ? "🪤" : "🖥️"}</span>
-                        <strong>${hName}</strong>
-                        <small style="color: var(--text-muted)">(${hInfo.ip})</small>
+                        <strong>${escapeHTML(hName)}</strong>
+                        <small style="color: var(--text-muted)">(${escapeHTML(hInfo.ip)})</small>
                     </div>
                 `;
             }
 
             netBox.innerHTML = `
                 <div class="network-box-header">
-                    <span class="net-title">${icons[key] || "🌐"} ${net.name}</span>
-                    <span class="net-subnet">${net.subnet}</span>
+                    <span class="net-title">${icons[key] || "🌐"} ${escapeHTML(net.name)}</span>
+                    <span class="net-subnet">${escapeHTML(net.subnet)}</span>
                 </div>
-                <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.6rem;">${net.name} Tier (${net.hosts ? Object.keys(net.hosts).length : 0} hosts)</p>
+                <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.6rem;">${escapeHTML(net.name)} Tier (${net.hosts ? Object.keys(net.hosts).length : 0} hosts)</p>
                 <div class="hosts-pills-list">${hostPillsHtml}</div>
             `;
             container.appendChild(netBox);
@@ -110,12 +117,12 @@ async function loadHoneytokens() {
             else if (t.type.includes("API")) typeClass = "type-api";
 
             tr.innerHTML = `
-                <td style="font-family: var(--font-mono); font-weight: bold; color: var(--primary);">${t.token_id}</td>
-                <td><span class="token-type-pill ${typeClass}">${t.type}</span></td>
-                <td style="font-family: var(--font-mono);">${t.identifier}</td>
-                <td style="color: var(--text-secondary); font-size: 0.82rem;">${t.location}</td>
-                <td>${t.desc_en}</td>
-                <td><span class="badge-tag">${t.classification}</span></td>
+                <td style="font-family: var(--font-mono); font-weight: bold; color: var(--primary);">${escapeHTML(t.token_id)}</td>
+                <td><span class="token-type-pill ${typeClass}">${escapeHTML(t.type)}</span></td>
+                <td style="font-family: var(--font-mono);">${escapeHTML(t.identifier)}</td>
+                <td style="color: var(--text-secondary); font-size: 0.82rem;">${escapeHTML(t.location)}</td>
+                <td>${escapeHTML(t.desc_en)}</td>
+                <td><span class="badge-tag">${escapeHTML(t.classification)}</span></td>
             `;
             tbody.appendChild(tr);
         });
@@ -144,24 +151,19 @@ async function loadIncidents() {
             card.className = "incident-card-item";
             card.onclick = () => openForensicModal(inc.incident_id);
 
-            const sevClass = `sev-${inc.severity}`;
-            const rulesBadges = (inc.rules_triggered || []).map(r => `<span style="background: rgba(255,255,255,0.1); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.75rem; font-family: var(--font-mono);">${r}</span>`).join(" ");
-
-            const passwordBadge = inc.captured_password 
-                ? `<span class="inc-meta-item" style="color: #f87171; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.4); padding: 0.2rem 0.6rem; border-radius: 6px;">🔑 Captured Password: <strong style="font-family: var(--font-mono); font-size: 0.95rem; color: #fca5a5;">${inc.captured_password}</strong></span>` 
-                : '';
+            const sevClass = `sev-${escapeHTML(inc.severity)}`;
+            const rulesBadges = (inc.rules_triggered || []).map(r => `<span style="background: rgba(255,255,255,0.1); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.75rem; font-family: var(--font-mono);">${escapeHTML(r)}</span>`).join(" ");
 
             card.innerHTML = `
                 <div class="inc-top-bar">
-                    <span class="inc-id">⚡ ${inc.incident_id}</span>
-                    <span class="severity-badge ${sevClass}">${inc.severity} (${inc.score}/100)</span>
+                    <span class="inc-id">⚡ ${escapeHTML(inc.incident_id)}</span>
+                    <span class="severity-badge ${sevClass}">${escapeHTML(inc.severity)} (${escapeHTML(inc.score)}/100)</span>
                 </div>
-                <p class="inc-summary">${inc.forensics ? inc.forensics.synthesis_en : "Suspicious activity detected violating access policy"}</p>
+                <p class="inc-summary">${escapeHTML(inc.forensics ? inc.forensics.synthesis_en : "Suspicious activity detected violating access policy")}</p>
                 <div class="inc-meta-row">
-                    <span class="inc-meta-item">👤 Actor: <strong style="color: #38bdf8;">${inc.actor}</strong></span>
-                    ${passwordBadge}
-                    <span class="inc-meta-item">🏢 Dept: <strong>${inc.department}</strong></span>
-                    <span class="inc-meta-item">💻 Workstation: <strong>${inc.source_workstation}</strong></span>
+                    <span class="inc-meta-item">👤 Actor: <strong style="color: #38bdf8;">${escapeHTML(inc.actor)}</strong></span>
+                    <span class="inc-meta-item">🏢 Dept: <strong>${escapeHTML(inc.department)}</strong></span>
+                    <span class="inc-meta-item">💻 Workstation: <strong>${escapeHTML(inc.source_workstation)}</strong></span>
                     <span class="inc-meta-item">📋 Rules: ${rulesBadges}</span>
                 </div>
             `;
@@ -239,10 +241,10 @@ function renderBenchmarkReport(data) {
     rows.forEach(r => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-            <td><strong>${r.name}</strong></td>
-            <td style="color: #fca5a5; font-family: var(--font-mono);">${r.base}</td>
-            <td style="color: #6ee7b7; font-weight: bold; font-family: var(--font-mono); font-size: 1.05rem;">${r.fs}</td>
-            <td style="color: #38bdf8; font-weight: bold;">${r.imp}</td>
+            <td><strong>${escapeHTML(r.name)}</strong></td>
+            <td style="color: #fca5a5; font-family: var(--font-mono);">${escapeHTML(r.base)}</td>
+            <td style="color: #6ee7b7; font-weight: bold; font-family: var(--font-mono); font-size: 1.05rem;">${escapeHTML(r.fs)}</td>
+            <td style="color: #38bdf8; font-weight: bold;">${escapeHTML(r.imp)}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -264,9 +266,9 @@ function openForensicModal(incidentId) {
     const badge = document.getElementById("modal-incident-badge");
     const body = document.getElementById("modal-incident-body");
 
-    title.textContent = `Explainable Forensic Audit: ${inc.incident_id}`;
-    badge.textContent = `${inc.severity} — ${inc.score}/100`;
-    badge.className = `severity-badge sev-${inc.severity}`;
+    title.textContent = `Explainable Forensic Audit: ${escapeHTML(inc.incident_id)}`;
+    badge.textContent = `${escapeHTML(inc.severity)} — ${escapeHTML(inc.score)}/100`;
+    badge.className = `severity-badge sev-${escapeHTML(inc.severity)}`;
 
     const forensics = inc.forensics || {};
     const rulesList = forensics.rule_contributions || [];
@@ -276,12 +278,12 @@ function openForensicModal(incidentId) {
         rulesHtml += `
             <div class="rule-tree-item">
                 <div class="rule-header-row">
-                    <span>${r.rule_id}: ${r.name_en}</span>
-                    <span class="rule-points-tag">+${r.points_contributed} pts</span>
+                    <span>${escapeHTML(r.rule_id)}: ${escapeHTML(r.name_en)}</span>
+                    <span class="rule-points-tag">+${escapeHTML(r.points_contributed)} pts</span>
                 </div>
-                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.4rem;">${r.explanation_en}</p>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.4rem;">${escapeHTML(r.explanation_en)}</p>
                 <div style="font-family: var(--font-mono); font-size: 0.78rem; background: rgba(0,0,0,0.3); padding: 0.4rem; border-radius: 6px;">
-                    <strong>Evidence Log:</strong> ${JSON.stringify(r.evidence)}
+                    <strong>Evidence Log:</strong> ${escapeHTML(JSON.stringify(r.evidence))}
                 </div>
             </div>
         `;
@@ -292,30 +294,22 @@ function openForensicModal(incidentId) {
     timeline.forEach((ev, i) => {
         timelineHtml += `
             <li style="margin-bottom: 0.6rem; font-size: 0.85rem; border-left: 2px solid var(--primary); padding-left: 0.75rem;">
-                <span style="color: var(--primary); font-family: var(--font-mono); font-weight: bold;">[Step ${i+1}]</span>
-                <span>User: <strong>${ev.username}</strong> traversing from <code>${ev.source_host}</code> to <code>${ev.target_host}</code></span>
+                <span style="color: var(--primary); font-family: var(--font-mono); font-weight: bold;">[Step ${escapeHTML(i+1)}]</span>
+                <span>User: <strong>${escapeHTML(ev.username)}</strong> traversing from <code>${escapeHTML(ev.source_host)}</code> to <code>${escapeHTML(ev.target_host)}</code></span>
                 <br>
-                <span style="color: var(--text-muted); font-size: 0.8rem;">Resource: ${ev.resource} | Action: ${ev.action} | Status: ${ev.status}</span>
+                <span style="color: var(--text-muted); font-size: 0.8rem;">Resource: ${escapeHTML(ev.resource)} | Action: ${escapeHTML(ev.action)} | Status: ${escapeHTML(ev.status)}</span>
             </li>
         `;
     });
-
-    const passwordBanner = inc.captured_password ? `
-        <div style="margin-top: 0.8rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); padding: 0.75rem 1rem; border-radius: 8px;">
-            <strong style="color: #fca5a5;">Captured Credentials:</strong>
-            <span style="margin-left: 0.5rem; font-family: var(--font-mono); font-size: 1.05rem;">User: <strong>${inc.actor}</strong> | Password: <strong style="color: #f87171;">${inc.captured_password}</strong></span>
-        </div>
-    ` : '';
 
     body.innerHTML = `
         <div class="forensic-score-banner">
             <div>
                 <span style="color: var(--text-secondary); font-size: 0.85rem;">Explainable Forensic Synthesis Verdict:</span>
-                <p style="font-size: 0.95rem; margin-top: 0.3rem; line-height: 1.6;">${forensics.synthesis_en}</p>
-                ${passwordBanner}
+                <p style="font-size: 0.95rem; margin-top: 0.3rem; line-height: 1.6;">${escapeHTML(forensics.synthesis_en)}</p>
             </div>
-            <div class="score-display" style="color: ${inc.severity_color};">
-                ${inc.score} <span style="font-size: 1rem; color: var(--text-muted);">/100</span>
+            <div class="score-display" style="color: ${escapeHTML(inc.severity_color)};">
+                ${escapeHTML(inc.score)} <span style="font-size: 1rem; color: var(--text-muted);">/100</span>
             </div>
         </div>
 
@@ -361,11 +355,11 @@ async function loadCredentials() {
             const tr = document.createElement("tr");
             const timeStr = c.timestamp.replace("T", " ").replace("Z", "");
             tr.innerHTML = `
-                <td style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${timeStr}</td>
-                <td><span class="badge-tag" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">${c.service}</span></td>
-                <td style="font-family: var(--font-mono); font-size: 0.85rem;">${c.source_host}</td>
-                <td><strong style="color: #6ee7b7; font-family: var(--font-mono); font-size: 1.05rem;">👤 ${c.username}</strong></td>
-                <td><strong style="color: #f87171; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); padding: 0.3rem 0.7rem; border-radius: 6px; font-family: var(--font-mono); font-size: 1.1rem; letter-spacing: 0.5px;">🔑 ${c.password}</strong></td>
+                <td style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${escapeHTML(timeStr)}</td>
+                <td><span class="badge-tag" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">${escapeHTML(c.service)}</span></td>
+                <td style="font-family: var(--font-mono); font-size: 0.85rem;">${escapeHTML(c.source_host)}</td>
+                <td><strong style="color: #6ee7b7; font-family: var(--font-mono); font-size: 1.05rem;">👤 ${escapeHTML(c.username)}</strong></td>
+                <td><span class="badge-tag">REDACTED</span></td>
                 <td><span class="severity-badge sev-${c.severity}">${c.severity}</span></td>
             `;
             tbody.appendChild(tr);
