@@ -266,8 +266,8 @@ function openForensicModal(incidentId) {
     const badge = document.getElementById("modal-incident-badge");
     const body = document.getElementById("modal-incident-body");
 
-    title.textContent = `Explainable Forensic Audit: ${escapeHTML(inc.incident_id)}`;
-    badge.textContent = `${escapeHTML(inc.severity)} — ${escapeHTML(inc.score)}/100`;
+    title.textContent = `Explainable Forensic Audit: ${inc.incident_id}`;
+    badge.textContent = `${inc.severity} — ${inc.score}/100`;
     const allowedSeverities = ["Critical", "High", "Medium", "Low"];
     const safeSeverity = allowedSeverities.includes(inc.severity) ? inc.severity : "Low";
     badge.className = `severity-badge sev-${safeSeverity}`;
