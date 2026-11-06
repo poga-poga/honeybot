@@ -228,13 +228,13 @@ function renderBenchmarkReport(data) {
     const fs = data.comparison.factoryshield_correlated;
 
     const rows = [
-        { name: "Precision (True Alert Accuracy)", base: `${base.precision}%`, fs: `${fs.precision}%`, imp: "+14.93%" },
-        { name: "Recall (Threat Detection Coverage)", base: `${base.recall}%`, fs: `${fs.recall}%`, imp: "+5.00%" },
-        { name: "F1-Score (Harmonic Mean)", base: `${base.f1_score}%`, fs: `${fs.f1_score}%`, imp: "+10.24%" },
-        { name: "False Positive Rate (FPR)", base: `${base.false_positive_rate}%`, fs: `${fs.false_positive_rate}%`, imp: "-100% (Zero FP)" },
-        { name: "Avg Detection Time (Latency)", base: `${base.avg_detection_time_ms} ms`, fs: `${fs.avg_detection_time_ms} ms`, imp: "Sub-millisecond" },
-        { name: "True Positives (Correctly Flagged)", base: `${base.TP} / 60`, fs: `${fs.TP} / 60`, imp: "100% Full Catch" },
-        { name: "False Positives (False Alarms on Normal)", base: `${base.FP} (False Alarms)`, fs: `${fs.FP} (Zero False Alarms)`, imp: "Complete Eradication" },
+        { name: "Precision (True Alert Accuracy)", base: `${escapeHTML(base.precision)}%`, fs: `${escapeHTML(fs.precision)}%`, imp: "+14.93%" },
+        { name: "Recall (Threat Detection Coverage)", base: `${escapeHTML(base.recall)}%`, fs: `${escapeHTML(fs.recall)}%`, imp: "+5.00%" },
+        { name: "F1-Score (Harmonic Mean)", base: `${escapeHTML(base.f1_score)}%`, fs: `${escapeHTML(fs.f1_score)}%`, imp: "+10.24%" },
+        { name: "False Positive Rate (FPR)", base: `${escapeHTML(base.false_positive_rate)}%`, fs: `${escapeHTML(fs.false_positive_rate)}%`, imp: "-100% (Zero FP)" },
+        { name: "Avg Detection Time (Latency)", base: `${escapeHTML(base.avg_detection_time_ms)} ms`, fs: `${escapeHTML(fs.avg_detection_time_ms)} ms`, imp: "Sub-millisecond" },
+        { name: "True Positives (Correctly Flagged)", base: `${escapeHTML(base.TP)} / 60`, fs: `${escapeHTML(fs.TP)} / 60`, imp: "100% Full Catch" },
+        { name: "False Positives (False Alarms on Normal)", base: `${escapeHTML(base.FP)} (False Alarms)`, fs: `${escapeHTML(fs.FP)} (Zero False Alarms)`, imp: "Complete Eradication" },
     ];
 
     tbody.innerHTML = "";
@@ -355,14 +355,16 @@ async function loadCredentials() {
         tbody.innerHTML = "";
         creds.forEach(c => {
             const tr = document.createElement("tr");
-            const timeStr = c.timestamp.replace("T", " ").replace("Z", "");
+            const timeStr = String(c.timestamp || "").replace("T", " ").replace("Z", "");
+            const allowedSeverities = ["Critical", "High", "Medium", "Low"];
+            const safeCredentialSeverity = allowedSeverities.includes(c.severity) ? c.severity : "Low";
             tr.innerHTML = `
                 <td style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${escapeHTML(timeStr)}</td>
                 <td><span class="badge-tag" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">${escapeHTML(c.service)}</span></td>
                 <td style="font-family: var(--font-mono); font-size: 0.85rem;">${escapeHTML(c.source_host)}</td>
                 <td><strong style="color: #6ee7b7; font-family: var(--font-mono); font-size: 1.05rem;">👤 ${escapeHTML(c.username)}</strong></td>
                 <td><span class="badge-tag">REDACTED</span></td>
-                <td><span class="severity-badge sev-${c.severity}">${c.severity}</span></td>
+                <td><span class="severity-badge sev-${c.severity}">${escapeHTML(safeCredentialSeverity)}</span></td>
             `;
             tbody.appendChild(tr);
         });
