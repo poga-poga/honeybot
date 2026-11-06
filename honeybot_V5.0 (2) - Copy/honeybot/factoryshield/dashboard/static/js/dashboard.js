@@ -4,11 +4,9 @@
 
 // Escape untrusted API values before inserting them into HTML.
 function escapeHTML(value) {
-    return String(value ?? "").replace(/[&<>"\']/g, char => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\\"": "&quot;", "\\\'": "&#39;"
-    }[char]));
+    const entities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+    return String(value ?? "").replace(/[&<>"']/g, char => entities[char]);
 }
-
 document.addEventListener("DOMContentLoaded", () => {
     loadStats();
     loadTopology();
@@ -151,7 +149,9 @@ async function loadIncidents() {
             card.className = "incident-card-item";
             card.onclick = () => openForensicModal(inc.incident_id);
 
-            const sevClass = `sev-${escapeHTML(inc.severity)}`;
+            const allowedSeverities = ["Critical", "High", "Medium", "Low"];
+            const safeSeverity = allowedSeverities.includes(inc.severity) ? inc.severity : "Low";
+            const sevClass = `sev-${safeSeverity}`;
             const rulesBadges = (inc.rules_triggered || []).map(r => `<span style="background: rgba(255,255,255,0.1); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.75rem; font-family: var(--font-mono);">${escapeHTML(r)}</span>`).join(" ");
 
             card.innerHTML = `
@@ -268,7 +268,9 @@ function openForensicModal(incidentId) {
 
     title.textContent = `Explainable Forensic Audit: ${escapeHTML(inc.incident_id)}`;
     badge.textContent = `${escapeHTML(inc.severity)} — ${escapeHTML(inc.score)}/100`;
-    badge.className = `severity-badge sev-${escapeHTML(inc.severity)}`;
+    const allowedSeverities = ["Critical", "High", "Medium", "Low"];
+    const safeSeverity = allowedSeverities.includes(inc.severity) ? inc.severity : "Low";
+    badge.className = `severity-badge sev-${safeSeverity}`;
 
     const forensics = inc.forensics || {};
     const rulesList = forensics.rule_contributions || [];
@@ -308,7 +310,7 @@ function openForensicModal(incidentId) {
                 <span style="color: var(--text-secondary); font-size: 0.85rem;">Explainable Forensic Synthesis Verdict:</span>
                 <p style="font-size: 0.95rem; margin-top: 0.3rem; line-height: 1.6;">${escapeHTML(forensics.synthesis_en)}</p>
             </div>
-            <div class="score-display" style="color: ${escapeHTML(inc.severity_color)};">
+            <div class="score-display" style="color: var(--primary);">
                 ${escapeHTML(inc.score)} <span style="font-size: 1rem; color: var(--text-muted);">/100</span>
             </div>
         </div>
