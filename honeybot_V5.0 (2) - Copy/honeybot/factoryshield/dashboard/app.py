@@ -158,11 +158,11 @@ def api_simulate_scenario(scenario_type):
         return jsonify({"error": f"Unknown scenario type: {scenario_type}"}), 400
 
     result = detector_engine.process_scenario_events(events, session_id=session_id)
-    return jsonify({
+    return jsonify(redact_sensitive_fields({
         "scenario": scenario_type,
         "session_id": session_id,
         "result": result
-    })
+    }))
 
 @app.route("/api/benchmark/run", methods=["POST", "GET"])
 def api_run_benchmark():
