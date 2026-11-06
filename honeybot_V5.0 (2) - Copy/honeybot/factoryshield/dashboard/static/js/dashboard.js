@@ -364,7 +364,7 @@ async function loadCredentials() {
                 <td style="font-family: var(--font-mono); font-size: 0.85rem;">${escapeHTML(c.source_host)}</td>
                 <td><strong style="color: #6ee7b7; font-family: var(--font-mono); font-size: 1.05rem;">👤 ${escapeHTML(c.username)}</strong></td>
                 <td><span class="badge-tag">REDACTED</span></td>
-                <td><span class="severity-badge sev-${c.severity}">${escapeHTML(safeCredentialSeverity)}</span></td>
+                <td><span class="severity-badge sev-${safeCredentialSeverity}">${escapeHTML(safeCredentialSeverity)}</span></td>
             `;
             tbody.appendChild(tr);
         });
