@@ -51,6 +51,16 @@ class DashboardAuthenticationTests(unittest.TestCase):
         response = self.client.post("/api/simulate/normal")
         self.assertEqual(response.status_code, 400)
 
+    def test_state_changing_api_accepts_valid_csrf_token(self):
+        self.login()
+        with self.client.session_transaction() as current_session:
+            token = current_session["csrf_token"]
+        response = self.client.post(
+            "/api/simulate/normal",
+            headers={"X-CSRF-Token": token},
+        )
+        self.assertEqual(response.status_code, 200)
+
     def test_logout_requires_csrf_token(self):
         self.login()
         response = self.client.post("/logout")
