@@ -6,7 +6,7 @@ Jordan Industrial Manufacturing (JIM)
 import sys
 import time
 from factoryshield.config import COMPANY_NAME_EN, COMPANY_NAME_AR, NETWORKS
-from factoryshield.dashboard.app import app
+from factoryshield.dashboard.app import app, AUTH_CONFIGURED
 from factoryshield.honeytokens.manager import honeytoken_mgr
 from factoryshield.enterprise.company import get_all_hosts
 from factoryshield.services.cad_web_trap import start_cad_web_trap_thread
@@ -48,6 +48,13 @@ def print_banner():
     print("========================================================================================\n")
 
 if __name__ == "__main__":
+    if not AUTH_CONFIGURED:
+        raise RuntimeError(
+            "Set FACTORYSHIELD_SECRET_KEY, FACTORYSHIELD_ADMIN_USERNAME, "
+            "and FACTORYSHIELD_ADMIN_PASSWORD before starting FactoryShield. "
+            "See SECURITY_SETUP.md."
+        )
+
     print_banner()
 
     # Start Decoy Trap Services in background daemon threads
@@ -58,4 +65,4 @@ if __name__ == "__main__":
     start_ssh_trap_thread(host="0.0.0.0", port=2222)
 
     # Start main SOC Dashboard (blocking)
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="127.0.0.1", port=5000, debug=False)

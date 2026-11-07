@@ -37,7 +37,16 @@ async function fetchJSON(url, options = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
+        const method = (options.method || "GET").toUpperCase();
+        const headers = { ...(options.headers || {}) };
+        if (method !== "GET") {
+            headers["X-CSRF-Token"] = document.querySelector('meta[name="csrf-token"]')?.content || "";
+        }
+        const response = await fetch(url, { ...options, headers, signal: controller.signal });
+        if (response.status === 401) {
+            window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+            throw new Error("Your session has expired. Please sign in again.");
+        }
         if (!response.ok) {
             throw new Error(`Request failed (${response.status}) for ${url}`);
         }
