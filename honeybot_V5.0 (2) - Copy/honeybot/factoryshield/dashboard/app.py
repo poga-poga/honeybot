@@ -1,11 +1,17 @@
 """
 FactoryShield Web Forensics & Security Dashboard
-Flask Application for the Isolated Security Monitoring Network
+Flask application with session-based dashboard/API authentication.
 """
-from flask import Flask, render_template, jsonify, request
+from flask import (
+    Flask, render_template, jsonify, request, redirect, url_for, session
+)
+from functools import wraps
+from datetime import timedelta
+import hmac
 import os
-import json
+import secrets
 from pathlib import Path
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from factoryshield.config import (
     COMPANY_NAME_EN, COMPANY_NAME_AR, NETWORKS, SCORING, SEVERITY_LEVELS
@@ -31,27 +37,137 @@ app = Flask(
     static_folder=str(static_dir)
 )
 
-# Seed an initial incident on startup so the dashboard is immediately vivid
+# Configure a stable secret key through the environment in every deployment.
+# The random fallback keeps local imports possible, but invalidates sessions on restart.
+app.config.update(
+    SECRET_KEY=os.environ.get("FACTORYSHIELD_SECRET_KEY") or secrets.token_hex(32),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("FACTORYSHIELD_COOKIE_SECURE", "false").lower() == "true",
+    PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
+)
+app.config["ADMIN_USERNAME"] = os.environ.get("FACTORYSHIELD_ADMIN_USERNAME", "").strip()
+_admin_password = os.environ.get("FACTORYSHIELD_ADMIN_PASSWORD", "")
+app.config["ADMIN_PASSWORD_HASH"] = (
+    generate_password_hash(_admin_password) if _admin_password else None
+)
+AUTH_CONFIGURED = bool(
+    os.environ.get("FACTORYSHIELD_SECRET_KEY")
+    and app.config["ADMIN_USERNAME"]
+    and app.config["ADMIN_PASSWORD_HASH"]
+)
+
+
+def csrf_token():
+    """Return the session-bound CSRF token, creating it when necessary."""
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_urlsafe(32)
+    return session["csrf_token"]
+
+
+def valid_csrf_token(token):
+    expected = session.get("csrf_token", "")
+    return bool(expected and token and hmac.compare_digest(expected, token))
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("authenticated"):
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Authentication required"}), 401
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def csrf_protected(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not valid_csrf_token(request.headers.get("X-CSRF-Token")):
+            return jsonify({"error": "Invalid or missing CSRF token"}), 400
+        return view(*args, **kwargs)
+    return wrapped
+
+
+# Seed an initial incident on startup so the dashboard is immediately vivid.
 def seed_initial_demo():
     if not detector_engine.incidents_history:
-        # Run 1 exfiltration and 1 privilege abuse scenario
         exfil_events = build_data_exfiltration_scenario("r.qasim")
         detector_engine.process_scenario_events(exfil_events, session_id="DEMO-EXFIL-001")
-        
         priv_events = build_privilege_abuse_scenario("l.najjar")
         detector_engine.process_scenario_events(priv_events, session_id="DEMO-PRIV-002")
 
+
 seed_initial_demo()
 
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    token = csrf_token()
+    if not AUTH_CONFIGURED:
+        return render_template(
+            "login.html",
+            csrf_token=token,
+            error="Server authentication is not configured. Set the required FactoryShield environment variables."
+        ), 503
+
+    if request.method == "POST":
+        if not valid_csrf_token(request.form.get("csrf_token")):
+            return render_template(
+                "login.html", csrf_token=token,
+                error="The login form expired. Refresh the page and try again."
+            ), 400
+
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        username_ok = hmac.compare_digest(
+            username.encode("utf-8"),
+            app.config["ADMIN_USERNAME"].encode("utf-8")
+        )
+        password_ok = check_password_hash(app.config["ADMIN_PASSWORD_HASH"], password)
+        if username_ok and password_ok:
+            session.clear()
+            session["authenticated"] = True
+            session["username"] = app.config["ADMIN_USERNAME"]
+            session["csrf_token"] = secrets.token_urlsafe(32)
+            session.permanent = True
+            next_url = request.args.get("next", "")
+            # Only allow local relative redirects; never trust an external next URL.
+            if next_url.startswith("/") and not next_url.startswith("//"):
+                return redirect(next_url)
+            return redirect(url_for("index"))
+
+        return render_template(
+            "login.html", csrf_token=csrf_token(),
+            error="Invalid username or password."
+        ), 401
+
+    return render_template("login.html", csrf_token=token, error=None)
+
+
+@app.route("/logout", methods=["POST"])
+@login_required
+@csrf_protected
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.route("/")
+@login_required
 def index():
     return render_template(
         "index.html",
         company_en=COMPANY_NAME_EN,
-        company_ar=COMPANY_NAME_AR
+        company_ar=COMPANY_NAME_AR,
+        csrf_token=csrf_token(),
+        username=session.get("username", "")
     )
 
+
 @app.route("/api/stats")
+@login_required
 def api_stats():
     incidents = detector_engine.incidents_history
     sev_counts = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
@@ -69,7 +185,9 @@ def api_stats():
         "latest_score": incidents[0]["score"] if incidents else 0
     })
 
+
 @app.route("/api/topology")
+@login_required
 def api_topology():
     return jsonify({
         "networks": NETWORKS,
@@ -85,7 +203,9 @@ def api_topology():
         }
     })
 
+
 @app.route("/api/honeytokens")
+@login_required
 def api_honeytokens():
     tokens = honeytoken_mgr.list_all()
     return jsonify([
@@ -101,6 +221,7 @@ def api_honeytokens():
         for t in tokens
     ])
 
+
 def redact_sensitive_fields(value):
     """Return API-safe data without raw passwords or credential secrets."""
     if isinstance(value, dict):
@@ -115,6 +236,7 @@ def redact_sensitive_fields(value):
 
 
 @app.route("/api/credentials")
+@login_required
 def api_credentials():
     creds = []
     for inc in detector_engine.incidents_history:
@@ -130,18 +252,25 @@ def api_credentials():
             })
     return jsonify([redact_sensitive_fields(cred) for cred in creds])
 
+
 @app.route("/api/incidents")
+@login_required
 def api_incidents():
     return jsonify(redact_sensitive_fields(detector_engine.incidents_history))
 
+
 @app.route("/api/incidents/<incident_id>")
+@login_required
 def api_incident_detail(incident_id):
     for inc in detector_engine.incidents_history:
         if inc["incident_id"] == incident_id:
             return jsonify(redact_sensitive_fields(inc))
     return jsonify({"error": "Incident not found"}), 404
 
+
 @app.route("/api/simulate/<scenario_type>", methods=["POST"])
+@login_required
+@csrf_protected
 def api_simulate_scenario(scenario_type):
     scenario_type = scenario_type.lower()
     session_id = f"SIM-{scenario_type.upper()}-{os.urandom(3).hex().upper()}"
@@ -164,10 +293,19 @@ def api_simulate_scenario(scenario_type):
         "result": result
     }))
 
-@app.route("/api/benchmark/run", methods=["POST", "GET"])
+
+@app.route("/api/benchmark/run", methods=["POST"])
+@login_required
+@csrf_protected
 def api_run_benchmark():
     report = benchmark_runner.evaluate_benchmark()
     return jsonify(report)
 
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    if not AUTH_CONFIGURED:
+        raise RuntimeError(
+            "Set FACTORYSHIELD_SECRET_KEY, FACTORYSHIELD_ADMIN_USERNAME, "
+            "and FACTORYSHIELD_ADMIN_PASSWORD before starting FactoryShield."
+        )
+    app.run(host="127.0.0.1", port=5000, debug=False)
