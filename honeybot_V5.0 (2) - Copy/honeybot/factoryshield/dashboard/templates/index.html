@@ -24,9 +24,9 @@
         </div>
 
         <div class="header-actions">
-            <div class="network-status-badge">
-                <span class="status-dot"></span>
-                <span>Isolated Security Monitoring Network (Purdue Level 3/4)</span>
+            <div class="network-status-badge status-degraded" role="status" aria-live="polite">
+                <span class="status-dot status-dot-degraded" id="connection-status-dot"></span>
+                <span id="connection-status-text">Connecting to dashboard...</span>
             </div>
             <button id="btn-run-benchmark" class="btn-gradient">
                 <span class="btn-icon">⚡</span>
@@ -69,9 +69,9 @@
             <div class="kpi-card glass-panel" id="card-precision">
                 <div class="kpi-icon-wrap icon-green">🎯</div>
                 <div class="kpi-content">
-                    <span class="kpi-label">Detection Precision</span>
-                    <h2 class="kpi-value" id="stat-precision">100%</h2>
-                    <span class="kpi-sub">vs. 85.07% Isolated Baseline</span>
+                    <span class="kpi-label">Latest Detection Score</span>
+                    <h2 class="kpi-value" id="stat-latest-score">--</h2>
+                    <span class="kpi-sub">Most recent incident score (0–100)</span>
                 </div>
             </div>
         </section>
@@ -137,8 +137,23 @@
                     <h3>🛡️ Live Incident Feed & Forensic Audit</h3>
                     <span class="badge-tag live-badge">Live Correlated Feed</span>
                 </div>
-                <div class="incidents-list" id="incidents-container">
-                    <!-- Populated dynamically via JS -->
+                <div class="incident-toolbar">
+                    <input id="incident-search" type="search" placeholder="Search ID, actor, department, host, or rule..." aria-label="Search incidents">
+                    <select id="incident-severity-filter" aria-label="Filter incidents by severity">
+                        <option value="all">All severities</option>
+                        <option value="Critical">Critical</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                    <select id="incident-sort" aria-label="Sort incidents">
+                        <option value="newest">Newest first</option>
+                        <option value="severity">Highest severity</option>
+                        <option value="score">Highest score</option>
+                    </select>
+                    <span id="incident-count" class="badge-tag">Loading incidents...</span>
+                </div>
+                <div class="incidents-list" id="incidents-container" aria-live="polite">
                     <div class="loading-spinner">Loading incident feed...</div>
                 </div>
             </section>
