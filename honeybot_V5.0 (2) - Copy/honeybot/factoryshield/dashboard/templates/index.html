@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>FactoryShield — Enterprise Industrial Honeypot</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,6 +29,11 @@
                 <span class="status-dot status-dot-degraded" id="connection-status-dot"></span>
                 <span id="connection-status-text">Connecting to dashboard...</span>
             </div>
+            <span class="badge-tag">Signed in: {{ username }}</span>
+            <form action="/logout" method="post" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="btn-gradient" style="background: #475569;">Sign out</button>
+            </form>
             <button id="btn-run-benchmark" class="btn-gradient">
                 <span class="btn-icon">⚡</span>
                 <span>Run 100-Scenario Academic Benchmark</span>
