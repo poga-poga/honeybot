@@ -84,7 +84,8 @@ def login_required(view):
 def csrf_protected(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        if not valid_csrf_token(request.headers.get("X-CSRF-Token")):
+        token = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token")
+        if not valid_csrf_token(token):
             return jsonify({"error": "Invalid or missing CSRF token"}), 400
         return view(*args, **kwargs)
     return wrapped
