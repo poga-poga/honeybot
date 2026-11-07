@@ -4,9 +4,9 @@ import re
 import unittest
 
 # Configure a test-only administrator before importing the Flask application.
-os.environ.setdefault("FACTORYSHIELD_SECRET_KEY", "test-only-secret-key-not-for-production")
-os.environ.setdefault("FACTORYSHIELD_ADMIN_USERNAME", "test-admin")
-os.environ.setdefault("FACTORYSHIELD_ADMIN_PASSWORD", "test-only-password")
+os.environ["FACTORYSHIELD_SECRET_KEY"] = "test-only-secret-key-not-for-production"
+os.environ["FACTORYSHIELD_ADMIN_USERNAME"] = "test-admin"
+os.environ["FACTORYSHIELD_ADMIN_PASSWORD"] = "test-only-password"
 
 from factoryshield.dashboard.app import app
 
@@ -51,10 +51,18 @@ class DashboardAuthenticationTests(unittest.TestCase):
         response = self.client.post("/api/simulate/normal")
         self.assertEqual(response.status_code, 400)
 
-    def test_logout_requires_csrf_header(self):
+    def test_logout_requires_csrf_token(self):
         self.login()
         response = self.client.post("/logout")
         self.assertEqual(response.status_code, 400)
+
+    def test_logout_accepts_session_csrf_token(self):
+        self.login()
+        with self.client.session_transaction() as current_session:
+            token = current_session["csrf_token"]
+        response = self.client.post("/logout", data={"csrf_token": token})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login", response.headers["Location"])
 
 
 if __name__ == "__main__":
