@@ -8,18 +8,74 @@ function escapeHTML(value) {
     return String(value ?? "").replace(/[&<>"']/g, char => entities[char]);
 }
 document.addEventListener("DOMContentLoaded", () => {
-    loadStats();
-    loadTopology();
-    loadHoneytokens();
-    loadIncidents();
-    loadCredentials();
+    loadTopology().catch(handleSectionLoadError);
+    loadHoneytokens().catch(handleSectionLoadError);
+    refreshDashboard();
 
-    // Attach Benchmark Click
+    const searchInput = document.getElementById("incident-search");
+    const severityFilter = document.getElementById("incident-severity-filter");
+    const sortSelect = document.getElementById("incident-sort");
+    if (searchInput) searchInput.addEventListener("input", renderIncidents);
+    if (severityFilter) severityFilter.addEventListener("change", renderIncidents);
+    if (sortSelect) sortSelect.addEventListener("change", renderIncidents);
+
     const benchBtn = document.getElementById("btn-run-benchmark");
-    if (benchBtn) {
-        benchBtn.addEventListener("click", runAcademicBenchmark);
-    }
+    if (benchBtn) benchBtn.addEventListener("click", runAcademicBenchmark);
 });
+
+// Dashboard data refresh and connection state
+const REFRESH_INTERVAL_MS = 5000;
+const REQUEST_TIMEOUT_MS = 8000;
+let refreshInProgress = false;
+let lastSuccessfulRefresh = null;
+
+async function fetchJSON(url, options = {}) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        if (!response.ok) {
+            throw new Error(`Request failed (${response.status}) for ${url}`);
+        }
+        return await response.json();
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+function setConnectionStatus(state, message) {
+    const badge = document.querySelector(".network-status-badge");
+    const label = document.getElementById("connection-status-text");
+    const dot = document.getElementById("connection-status-dot");
+    if (!badge || !label || !dot) return;
+    badge.classList.remove("status-connected", "status-degraded", "status-disconnected");
+    badge.classList.add(`status-${state}`);
+    label.textContent = message;
+    dot.className = `status-dot status-dot-${state}`;
+}
+
+function handleSectionLoadError(error) {
+    console.error("Dashboard section failed to load:", error);
+}
+
+async function refreshDashboard() {
+    if (refreshInProgress || document.visibilityState === "hidden") return;
+    refreshInProgress = true;
+    const results = await Promise.allSettled([
+        loadStats(),
+        loadIncidents(),
+        loadCredentials()
+    ]);
+    const failures = results.filter(result => result.status === "rejected");
+    if (failures.length === 0) {
+        lastSuccessfulRefresh = new Date();
+        setConnectionStatus("connected", `Connected · Updated ${lastSuccessfulRefresh.toLocaleTimeString()}`);
+    } else {
+        console.warn("Some dashboard data could not be refreshed:", failures);
+        setConnectionStatus("degraded", "Connection issue · Showing last available data");
+    }
+    refreshInProgress = false;
+}
 
 // Toast Helper
 function showToast(message, isError = false) {
@@ -35,151 +91,165 @@ function showToast(message, isError = false) {
 
 // 1. Load Stats
 async function loadStats() {
-    try {
-        const res = await fetch("/api/stats");
-        const data = await res.json();
-        
-        document.getElementById("stat-incidents").textContent = data.total_incidents || 0;
-        document.getElementById("stat-canaries").textContent = data.active_decoys || 0;
-        document.getElementById("stat-hosts").textContent = data.monitored_hosts || 0;
-    } catch (err) {
-        console.error("Failed to load stats:", err);
-    }
+    const data = await fetchJSON("/api/stats");
+    document.getElementById("stat-incidents").textContent = data.total_incidents ?? 0;
+    document.getElementById("stat-canaries").textContent = data.active_decoys ?? 0;
+    document.getElementById("stat-hosts").textContent = data.monitored_hosts ?? 0;
+    document.getElementById("stat-latest-score").textContent = data.latest_score ?? 0;
 }
 
 // 2. Load Networks & Topology (Purdue Model)
 async function loadTopology() {
     const container = document.getElementById("networks-view");
-    try {
-        const res = await fetch("/api/topology");
-        const data = await res.json();
-        
-        container.innerHTML = "";
-        const networks = data.networks || {};
+    const data = await fetchJSON("/api/topology");
+    container.innerHTML = "";
+    const networks = data.networks || {};
+    const icons = { office: "💻", engineering: "📐", production: "⚙️", security: "🛡️" };
 
-        const icons = {
-            office: "💻",
-            engineering: "📐",
-            production: "⚙️",
-            security: "🛡️"
-        };
-
-        for (const [key, net] of Object.entries(networks)) {
-            const netBox = document.createElement("div");
-            netBox.className = "network-box";
-
-            const hosts = net.hosts || {};
-            let hostPillsHtml = "";
-            for (const [hName, hInfo] of Object.entries(hosts)) {
-                const isCanaryAsset = hName.toLowerCase().includes("cad") || hName.toLowerCase().includes("repo") || hName.toLowerCase().includes("plc");
-                const pillClass = isCanaryAsset ? "host-pill has-canary" : "host-pill";
-                hostPillsHtml += `
-                    <div class="${pillClass}" title="${escapeHTML(hInfo.ip)} | ${escapeHTML(hInfo.type || hInfo.dept)}">
-                        <span>${isCanaryAsset ? "🪤" : "🖥️"}</span>
-                        <strong>${escapeHTML(hName)}</strong>
-                        <small style="color: var(--text-muted)">(${escapeHTML(hInfo.ip)})</small>
-                    </div>
-                `;
-            }
-
-            netBox.innerHTML = `
-                <div class="network-box-header">
-                    <span class="net-title">${icons[key] || "🌐"} ${escapeHTML(net.name)}</span>
-                    <span class="net-subnet">${escapeHTML(net.subnet)}</span>
-                </div>
-                <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.6rem;">${escapeHTML(net.name)} Tier (${net.hosts ? Object.keys(net.hosts).length : 0} hosts)</p>
-                <div class="hosts-pills-list">${hostPillsHtml}</div>
-            `;
-            container.appendChild(netBox);
+    for (const [key, net] of Object.entries(networks)) {
+        const netBox = document.createElement("div");
+        netBox.className = "network-box";
+        const hosts = net.hosts || {};
+        let hostPillsHtml = "";
+        for (const [hName, hInfo] of Object.entries(hosts)) {
+            const isCanaryAsset = hName.toLowerCase().includes("cad") || hName.toLowerCase().includes("repo") || hName.toLowerCase().includes("plc");
+            const pillClass = isCanaryAsset ? "host-pill has-canary" : "host-pill";
+            hostPillsHtml += `
+                <div class="${pillClass}" title="${escapeHTML(hInfo.ip)} | ${escapeHTML(hInfo.type || hInfo.dept)}">
+                    <span>${isCanaryAsset ? "🪤" : "🖥️"}</span>
+                    <strong>${escapeHTML(hName)}</strong>
+                    <small style="color: var(--text-muted)">(${escapeHTML(hInfo.ip)})</small>
+                </div>`;
         }
-    } catch (err) {
-        console.error("Failed to load topology:", err);
-        container.innerHTML = "<p style='color: var(--danger)'>Failed to load network topology map</p>";
+        netBox.innerHTML = `
+            <div class="network-box-header">
+                <span class="net-title">${icons[key] || "🌐"} ${escapeHTML(net.name)}</span>
+                <span class="net-subnet">${escapeHTML(net.subnet)}</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.6rem;">${escapeHTML(net.name)} Tier (${Object.keys(hosts).length} hosts)</p>
+            <div class="hosts-pills-list">${hostPillsHtml}</div>`;
+        container.appendChild(netBox);
     }
 }
 
 // 3. Load Honeytokens Table
 async function loadHoneytokens() {
     const tbody = document.getElementById("honeytokens-tbody");
-    try {
-        const res = await fetch("/api/honeytokens");
-        const tokens = await res.json();
-
-        tbody.innerHTML = "";
-        tokens.forEach(t => {
-            const tr = document.createElement("tr");
-
-            let typeClass = "type-file";
-            if (t.type.includes("Database")) typeClass = "type-database";
-            else if (t.type.includes("Account")) typeClass = "type-account";
-            else if (t.type.includes("API")) typeClass = "type-api";
-
-            tr.innerHTML = `
-                <td style="font-family: var(--font-mono); font-weight: bold; color: var(--primary);">${escapeHTML(t.token_id)}</td>
-                <td><span class="token-type-pill ${typeClass}">${escapeHTML(t.type)}</span></td>
-                <td style="font-family: var(--font-mono);">${escapeHTML(t.identifier)}</td>
-                <td style="color: var(--text-secondary); font-size: 0.82rem;">${escapeHTML(t.location)}</td>
-                <td>${escapeHTML(t.desc_en)}</td>
-                <td><span class="badge-tag">${escapeHTML(t.classification)}</span></td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } catch (err) {
-        console.error("Failed to load honeytokens:", err);
-    }
+    const tokens = await fetchJSON("/api/honeytokens");
+    tbody.innerHTML = "";
+    tokens.forEach(t => {
+        const tr = document.createElement("tr");
+        const tokenType = String(t.type || "");
+        let typeClass = "type-file";
+        if (tokenType.includes("Database")) typeClass = "type-database";
+        else if (tokenType.includes("Account")) typeClass = "type-account";
+        else if (tokenType.includes("API")) typeClass = "type-api";
+        tr.innerHTML = `
+            <td style="font-family: var(--font-mono); font-weight: bold; color: var(--primary);">${escapeHTML(t.token_id)}</td>
+            <td><span class="token-type-pill ${typeClass}">${escapeHTML(tokenType)}</span></td>
+            <td style="font-family: var(--font-mono);">${escapeHTML(t.identifier)}</td>
+            <td style="color: var(--text-secondary); font-size: 0.82rem;">${escapeHTML(t.location)}</td>
+            <td>${escapeHTML(t.desc_en)}</td>
+            <td><span class="badge-tag">${escapeHTML(t.classification)}</span></td>`;
+        tbody.appendChild(tr);
+    });
 }
 
-// 4. Load Live Incidents Feed
+// 4. Load and organize the live incidents feed
 let allIncidentsCache = [];
-async function loadIncidents() {
+
+function incidentTimestamp(incident) {
+    const parsed = Date.parse(incident.timestamp || "");
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function renderIncidents() {
     const container = document.getElementById("incidents-container");
-    try {
-        const res = await fetch("/api/incidents");
-        const incidents = await res.json();
-        allIncidentsCache = incidents;
+    const search = (document.getElementById("incident-search")?.value || "").trim().toLowerCase();
+    const severity = document.getElementById("incident-severity-filter")?.value || "all";
+    const sort = document.getElementById("incident-sort")?.value || "newest";
 
-        container.innerHTML = "";
-        if (!incidents || incidents.length === 0) {
-            container.innerHTML = "<p style='color: var(--text-muted); padding: 1rem;'>No security incidents recorded yet.</p>";
-            return;
-        }
+    let incidents = allIncidentsCache.filter(inc => {
+        const safeSeverity = ["Critical", "High", "Medium", "Low"].includes(inc.severity) ? inc.severity : "Low";
+        const searchable = [
+            inc.incident_id, inc.actor, inc.department, inc.source_workstation,
+            ...(inc.rules_triggered || [])
+        ].join(" ").toLowerCase();
+        return (severity === "all" || safeSeverity === severity) && searchable.includes(search);
+    });
 
-        incidents.forEach(inc => {
-            const card = document.createElement("div");
-            card.className = "incident-card-item";
-            card.onclick = () => openForensicModal(inc.incident_id);
-
-            const allowedSeverities = ["Critical", "High", "Medium", "Low"];
-            const safeSeverity = allowedSeverities.includes(inc.severity) ? inc.severity : "Low";
-            const sevClass = `sev-${safeSeverity}`;
-            const rulesBadges = (inc.rules_triggered || []).map(r => `<span style="background: rgba(255,255,255,0.1); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.75rem; font-family: var(--font-mono);">${escapeHTML(r)}</span>`).join(" ");
-
-            card.innerHTML = `
-                <div class="inc-top-bar">
-                    <span class="inc-id">⚡ ${escapeHTML(inc.incident_id)}</span>
-                    <span class="severity-badge ${sevClass}">${escapeHTML(inc.severity)} (${escapeHTML(inc.score)}/100)</span>
-                </div>
-                <p class="inc-summary">${escapeHTML(inc.forensics ? inc.forensics.synthesis_en : "Suspicious activity detected violating access policy")}</p>
-                <div class="inc-meta-row">
-                    <span class="inc-meta-item">👤 Actor: <strong style="color: #38bdf8;">${escapeHTML(inc.actor)}</strong></span>
-                    <span class="inc-meta-item">🏢 Dept: <strong>${escapeHTML(inc.department)}</strong></span>
-                    <span class="inc-meta-item">💻 Workstation: <strong>${escapeHTML(inc.source_workstation)}</strong></span>
-                    <span class="inc-meta-item">📋 Rules: ${rulesBadges}</span>
-                </div>
-            `;
-            container.appendChild(card);
+    if (sort === "severity") {
+        const rank = { Critical: 4, High: 3, Medium: 2, Low: 1 };
+        incidents.sort((a, b) => {
+            const aSeverity = ["Critical", "High", "Medium", "Low"].includes(a.severity) ? a.severity : "Low";
+            const bSeverity = ["Critical", "High", "Medium", "Low"].includes(b.severity) ? b.severity : "Low";
+            return rank[bSeverity] - rank[aSeverity] || incidentTimestamp(b) - incidentTimestamp(a);
         });
-    } catch (err) {
-        console.error("Failed to load incidents:", err);
+    } else if (sort === "score") {
+        incidents.sort((a, b) => Number(b.score || 0) - Number(a.score || 0) || incidentTimestamp(b) - incidentTimestamp(a));
+    } else {
+        incidents.sort((a, b) => incidentTimestamp(b) - incidentTimestamp(a));
     }
+
+    const count = document.getElementById("incident-count");
+    if (count) count.textContent = `${incidents.length} / ${allIncidentsCache.length} incidents`;
+    container.innerHTML = "";
+    if (incidents.length === 0) {
+        container.innerHTML = "<p class='incident-empty-state'>No incidents match the selected filters.</p>";
+        return;
+    }
+
+    incidents.forEach(inc => {
+        const card = document.createElement("div");
+        card.className = "incident-card-item";
+        card.tabIndex = 0;
+        card.setAttribute("role", "button");
+        card.setAttribute("aria-label", `Open incident ${inc.incident_id}`);
+        card.addEventListener("click", () => openForensicModal(inc.incident_id));
+        card.addEventListener("keydown", event => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openForensicModal(inc.incident_id);
+            }
+        });
+
+        const allowedSeverities = ["Critical", "High", "Medium", "Low"];
+        const safeSeverity = allowedSeverities.includes(inc.severity) ? inc.severity : "Low";
+        const sevClass = `sev-${safeSeverity}`;
+        const rulesBadges = (inc.rules_triggered || []).map(rule =>
+            `<span class="incident-rule-badge">${escapeHTML(rule)}</span>`
+        ).join(" ");
+        const timestamp = inc.timestamp ? new Date(inc.timestamp).toLocaleString() : "Time unavailable";
+
+        card.innerHTML = `
+            <div class="inc-top-bar">
+                <span class="inc-id">⚡ ${escapeHTML(inc.incident_id)}</span>
+                <span class="severity-badge ${sevClass}">${escapeHTML(safeSeverity)} (${escapeHTML(inc.score ?? 0)}/100)</span>
+            </div>
+            <p class="inc-summary">${escapeHTML(inc.forensics?.synthesis_en || "Suspicious activity detected violating access policy")}</p>
+            <div class="inc-meta-row">
+                <span class="inc-meta-item">👤 Actor: <strong>${escapeHTML(inc.actor)}</strong></span>
+                <span class="inc-meta-item">🏢 Dept: <strong>${escapeHTML(inc.department)}</strong></span>
+                <span class="inc-meta-item">💻 Workstation: <strong>${escapeHTML(inc.source_workstation)}</strong></span>
+                <span class="inc-meta-item">📋 Rules: ${rulesBadges}</span>
+            </div>
+            <div class="incident-timestamp">${escapeHTML(timestamp)}</div>`;
+        container.appendChild(card);
+    });
+}
+
+async function loadIncidents() {
+    const incidents = await fetchJSON("/api/incidents");
+    if (!Array.isArray(incidents)) throw new Error("Invalid incidents response");
+    allIncidentsCache = incidents;
+    renderIncidents();
 }
 
 // 5. Trigger Single Scenario
 async function triggerScenario(type) {
     showToast(`🚀 Simulating [${type}] scenario...`);
     try {
-        const res = await fetch(`/api/simulate/${type}`, { method: "POST" });
-        const data = await res.json();
+        const data = await fetchJSON(`/api/simulate/${encodeURIComponent(type)}`, { method: "POST" });
 
         if (data.result) {
             if (data.result.alert_generated) {
@@ -188,9 +258,7 @@ async function triggerScenario(type) {
                 showToast(`✅ Authorized normal operation (Score: 0). Zero false alarms.`);
             }
         }
-        await loadStats();
-        await loadIncidents();
-        await loadCredentials();
+        await refreshDashboard();
     } catch (err) {
         console.error("Simulation error:", err);
         showToast("Failed to execute scenario", true);
@@ -205,8 +273,7 @@ async function runAcademicBenchmark() {
     showToast("🧪 Running comparative academic benchmark across 100 scenarios...");
 
     try {
-        const res = await fetch("/api/benchmark/run", { method: "POST" });
-        const data = await res.json();
+        const data = await fetchJSON("/api/benchmark/run", { method: "POST" });
 
         renderBenchmarkReport(data);
         showToast("🎉 100-scenario benchmark completed successfully!");
@@ -338,44 +405,31 @@ async function loadCredentials() {
     const tbody = document.getElementById("credentials-tbody");
     const badge = document.getElementById("creds-count-badge");
     if (!tbody) return;
+    const creds = await fetchJSON("/api/credentials");
+    if (!Array.isArray(creds)) throw new Error("Invalid credentials response");
 
-    try {
-        const res = await fetch("/api/credentials");
-        const creds = await res.json();
-
-        if (badge) {
-            badge.textContent = `${creds.length} Credentials Intercepted`;
-        }
-
-        if (!creds || creds.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Awaiting login attempts on Web Trap (8088), HMI Portal (8080), or FTP Service (21/2121)...</td></tr>`;
-            return;
-        }
-
-        tbody.innerHTML = "";
-        creds.forEach(c => {
-            const tr = document.createElement("tr");
-            const timeStr = String(c.timestamp || "").replace("T", " ").replace("Z", "");
-            const allowedSeverities = ["Critical", "High", "Medium", "Low"];
-            const safeCredentialSeverity = allowedSeverities.includes(c.severity) ? c.severity : "Low";
-            tr.innerHTML = `
-                <td style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${escapeHTML(timeStr)}</td>
-                <td><span class="badge-tag" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">${escapeHTML(c.service)}</span></td>
-                <td style="font-family: var(--font-mono); font-size: 0.85rem;">${escapeHTML(c.source_host)}</td>
-                <td><strong style="color: #6ee7b7; font-family: var(--font-mono); font-size: 1.05rem;">👤 ${escapeHTML(c.username)}</strong></td>
-                <td><span class="badge-tag">REDACTED</span></td>
-                <td><span class="severity-badge sev-${safeCredentialSeverity}">${escapeHTML(safeCredentialSeverity)}</span></td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } catch (err) {
-        console.error("Failed to load credentials:", err);
+    if (badge) badge.textContent = `${creds.length} Credentials Intercepted`;
+    if (creds.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Awaiting login attempts on Web Trap (8088), HMI Portal (8080), or FTP Service (21/2121)...</td></tr>`;
+        return;
     }
+
+    tbody.innerHTML = "";
+    creds.forEach(c => {
+        const tr = document.createElement("tr");
+        const timeStr = String(c.timestamp || "").replace("T", " ").replace("Z", "");
+        const allowedSeverities = ["Critical", "High", "Medium", "Low"];
+        const safeSeverity = allowedSeverities.includes(c.severity) ? c.severity : "Low";
+        tr.innerHTML = `
+            <td style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${escapeHTML(timeStr)}</td>
+            <td><span class="badge-tag" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">${escapeHTML(c.service)}</span></td>
+            <td style="font-family: var(--font-mono); font-size: 0.85rem;">${escapeHTML(c.source_host)}</td>
+            <td><strong style="color: #6ee7b7; font-family: var(--font-mono); font-size: 1.05rem;">👤 ${escapeHTML(c.username)}</strong></td>
+            <td><span class="badge-tag">REDACTED</span></td>
+            <td><span class="severity-badge sev-${safeSeverity}">${escapeHTML(safeSeverity)}</span></td>`;
+        tbody.appendChild(tr);
+    });
 }
 
-// Auto-refresh every 3.5 seconds
-setInterval(() => {
-    loadStats();
-    loadIncidents();
-    loadCredentials();
-}, 3500);
+// Refresh only while the dashboard is visible; requests never overlap.
+setInterval(refreshDashboard, REFRESH_INTERVAL_MS);
