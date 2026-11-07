@@ -8,9 +8,12 @@ function escapeHTML(value) {
     return String(value ?? "").replace(/[&<>"']/g, char => entities[char]);
 }
 document.addEventListener("DOMContentLoaded", () => {
-    loadTopology().catch(handleSectionLoadError);
-    loadHoneytokens().catch(handleSectionLoadError);
+    loadTopology().catch(error => handleSectionLoadError(error, "topology"));
+    loadHoneytokens().catch(error => handleSectionLoadError(error, "honeytokens"));
     refreshDashboard();
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") refreshDashboard();
+    });
 
     const searchInput = document.getElementById("incident-search");
     const severityFilter = document.getElementById("incident-severity-filter");
@@ -28,6 +31,7 @@ const REFRESH_INTERVAL_MS = 5000;
 const REQUEST_TIMEOUT_MS = 8000;
 let refreshInProgress = false;
 let lastSuccessfulRefresh = null;
+const staticSectionFailures = new Set();
 
 async function fetchJSON(url, options = {}) {
     const controller = new AbortController();
@@ -54,8 +58,14 @@ function setConnectionStatus(state, message) {
     dot.className = `status-dot status-dot-${state}`;
 }
 
-function handleSectionLoadError(error) {
+function handleSectionLoadError(error, section) {
     console.error("Dashboard section failed to load:", error);
+    if (section) staticSectionFailures.add(section);
+    const target = section === "topology"
+        ? document.getElementById("networks-view")
+        : document.getElementById("honeytokens-tbody");
+    if (target) target.textContent = "This section is temporarily unavailable. The dashboard will keep the last available data.";
+    setConnectionStatus("degraded", "Some dashboard data is unavailable");
 }
 
 async function refreshDashboard() {
@@ -67,7 +77,7 @@ async function refreshDashboard() {
         loadCredentials()
     ]);
     const failures = results.filter(result => result.status === "rejected");
-    if (failures.length === 0) {
+    if (failures.length === 0 && staticSectionFailures.size === 0) {
         lastSuccessfulRefresh = new Date();
         setConnectionStatus("connected", `Connected · Updated ${lastSuccessfulRefresh.toLocaleTimeString()}`);
     } else {
