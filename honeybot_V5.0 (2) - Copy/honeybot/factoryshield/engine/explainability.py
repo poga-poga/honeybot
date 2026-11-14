@@ -3,7 +3,8 @@ Forensic Explainability & Audit Engine
 Produces verifiable, transparent, and interpretable incident reports.
 """
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
+from factoryshield.engine.mitre import MitreEngine
 
 class ExplainabilityEngine:
     @staticmethod
@@ -22,7 +23,9 @@ class ExplainabilityEngine:
         Builds an explainable forensic justification breakdown for security analysts.
         """
         rule_breakdowns = []
+        rule_ids = []
         for r in triggered_rules:
+            rule_ids.append(r.rule_id)
             rule_breakdowns.append({
                 "rule_id": r.rule_id,
                 "name_en": r.rule_name_en,
@@ -32,6 +35,8 @@ class ExplainabilityEngine:
                 "explanation_ar": r.explanation_ar,
                 "evidence": r.evidence
             })
+
+        mitre_details = MitreEngine.map_incident_tactics(rule_ids, events_timeline)
 
         # Generate summary synthesis in both English and Arabic
         points_str = " + ".join([f"{r.rule_id}({r.points}pts)" for r in triggered_rules])
@@ -51,7 +56,7 @@ class ExplainabilityEngine:
         return {
             "incident_id": incident_id,
             "session_id": session_id,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "actor": {
                 "username": username,
                 "department": user_dept,
@@ -64,6 +69,7 @@ class ExplainabilityEngine:
                 "color": score_info["severity_color"]
             },
             "mitre_att_ck": mitre_tactics,
+            "mitre_att_ck_details": mitre_details,
             "synthesis_ar": ar_summary,
             "synthesis_en": en_summary,
             "rule_contributions": rule_breakdowns,

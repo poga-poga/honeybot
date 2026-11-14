@@ -13,7 +13,8 @@ from factoryshield.simulator.scenario_runner import (
     build_data_exfiltration_scenario,
     build_privilege_abuse_scenario,
     build_lateral_movement_scenario,
-    build_normal_activity_scenario
+    build_normal_activity_scenario,
+    build_modbus_ics_scenario
 )
 
 def run_cli_scenario(scen_type: str):
@@ -26,6 +27,8 @@ def run_cli_scenario(scen_type: str):
         events = build_privilege_abuse_scenario("l.najjar")
     elif scen_type in ["lateral", "lateral_movement"]:
         events = build_lateral_movement_scenario("a.barakat")
+    elif scen_type in ["modbus", "ics", "scada"]:
+        events = build_modbus_ics_scenario("w.abdallah_consultant")
     elif scen_type in ["normal", "authorized"]:
         events = build_normal_activity_scenario("Engineering")
     else:

@@ -1,5 +1,7 @@
 /**
- * FactoryShield Interactive Dashboard Controller (English Edition)
+ * FactoryShield Interactive Dashboard Controller (Industrial Edition v5.1)
+ * Enhanced with MITRE ATT&CK Heatmap, SOAR Active Defense, Interactive Attack Path Graph,
+ * Modbus ICS Deception, and Forensic PCAP & PDF Exports.
  */
 
 // Escape untrusted API values before inserting them into HTML.
@@ -7,10 +9,14 @@ function escapeHTML(value) {
     const entities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
     return String(value ?? "").replace(/[&<>"']/g, char => entities[char]);
 }
+
 document.addEventListener("DOMContentLoaded", () => {
     loadTopology().catch(error => handleSectionLoadError(error, "topology"));
     loadHoneytokens().catch(error => handleSectionLoadError(error, "honeytokens"));
+    loadMitreMatrix().catch(error => console.error("MITRE load error:", error));
+    loadSoarStatus().catch(error => console.error("SOAR load error:", error));
     refreshDashboard();
+
     document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") refreshDashboard();
     });
@@ -32,6 +38,7 @@ const REQUEST_TIMEOUT_MS = 8000;
 let refreshInProgress = false;
 let lastSuccessfulRefresh = null;
 const staticSectionFailures = new Set();
+let allIncidentsCache = [];
 
 async function fetchJSON(url, options = {}) {
     const controller = new AbortController();
@@ -41,6 +48,9 @@ async function fetchJSON(url, options = {}) {
         const headers = { ...(options.headers || {}) };
         if (method !== "GET") {
             headers["X-CSRF-Token"] = document.querySelector('meta[name="csrf-token"]')?.content || "";
+            if (!headers["Content-Type"]) {
+                headers["Content-Type"] = "application/json";
+            }
         }
         const response = await fetch(url, { ...options, headers, signal: controller.signal });
         if (response.status === 401) {
@@ -83,7 +93,9 @@ async function refreshDashboard() {
     const results = await Promise.allSettled([
         loadStats(),
         loadIncidents(),
-        loadCredentials()
+        loadCredentials(),
+        loadSoarStatus(),
+        loadMitreMatrix()
     ]);
     const failures = results.filter(result => result.status === "rejected");
     if (failures.length === 0 && staticSectionFailures.size === 0) {
@@ -101,7 +113,7 @@ function showToast(message, isError = false) {
     const toast = document.getElementById("toast-notification");
     if (!toast) return;
     toast.textContent = message;
-    toast.style.borderColor = isError ? "#ef4444" : "#38bdf8";
+    toast.style.borderColor = isError ? "var(--critical)" : "var(--primary)";
     toast.classList.add("show");
     setTimeout(() => {
         toast.classList.remove("show");
@@ -110,43 +122,42 @@ function showToast(message, isError = false) {
 
 // 1. Load Stats
 async function loadStats() {
-    const data = await fetchJSON("/api/stats");
-    document.getElementById("stat-incidents").textContent = data.total_incidents ?? 0;
-    document.getElementById("stat-canaries").textContent = data.active_decoys ?? 0;
-    document.getElementById("stat-hosts").textContent = data.monitored_hosts ?? 0;
-    document.getElementById("stat-latest-score").textContent = data.latest_score ?? 0;
+    const stats = await fetchJSON("/api/stats");
+    document.getElementById("stat-incidents").textContent = stats.total_incidents ?? "--";
+    document.getElementById("stat-canaries").textContent = stats.active_decoys ?? "--";
+    document.getElementById("stat-hosts").textContent = stats.monitored_hosts ?? "--";
+    document.getElementById("stat-latest-score").textContent = `${stats.latest_score ?? 0}/100`;
 }
 
-// 2. Load Networks & Topology (Purdue Model)
+// 2. Load Network Topology
 async function loadTopology() {
-    const container = document.getElementById("networks-view");
     const data = await fetchJSON("/api/topology");
+    const container = document.getElementById("networks-view");
     container.innerHTML = "";
-    const networks = data.networks || {};
-    const icons = { office: "💻", engineering: "📐", production: "⚙️", security: "🛡️" };
 
-    for (const [key, net] of Object.entries(networks)) {
+    const networks = data.networks || {};
+    for (const [netKey, net] of Object.entries(networks)) {
         const netBox = document.createElement("div");
-        netBox.className = "network-box";
-        const hosts = net.hosts || {};
-        let hostPillsHtml = "";
-        for (const [hName, hInfo] of Object.entries(hosts)) {
-            const isCanaryAsset = hName.toLowerCase().includes("cad") || hName.toLowerCase().includes("repo") || hName.toLowerCase().includes("plc");
-            const pillClass = isCanaryAsset ? "host-pill has-canary" : "host-pill";
-            hostPillsHtml += `
-                <div class="${pillClass}" title="${escapeHTML(hInfo.ip)} | ${escapeHTML(hInfo.type || hInfo.dept)}">
-                    <span>${isCanaryAsset ? "🪤" : "🖥️"}</span>
-                    <strong>${escapeHTML(hName)}</strong>
-                    <small style="color: var(--text-muted)">(${escapeHTML(hInfo.ip)})</small>
-                </div>`;
-        }
+        netBox.className = "network-segment-card";
+
+        let hostsHtml = "";
+        (net.hosts || []).forEach(h => {
+            const isCanaryHost = h.toLowerCase().includes("cad") || h.toLowerCase().includes("plc");
+            hostsHtml += `
+                <div class="host-pill ${isCanaryHost ? 'host-canary' : ''}">
+                    <span class="host-icon">${isCanaryHost ? '🪤' : '💻'}</span>
+                    <span>${escapeHTML(h)}</span>
+                </div>
+            `;
+        });
+
         netBox.innerHTML = `
-            <div class="network-box-header">
-                <span class="net-title">${icons[key] || "🌐"} ${escapeHTML(net.name)}</span>
-                <span class="net-subnet">${escapeHTML(net.subnet)}</span>
+            <div class="net-header">
+                <strong>${escapeHTML(net.name)}</strong>
+                <span class="subnet-tag">${escapeHTML(net.subnet)}</span>
             </div>
-            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.6rem;">${escapeHTML(net.name)} Tier (${Object.keys(hosts).length} hosts)</p>
-            <div class="hosts-pills-list">${hostPillsHtml}</div>`;
+            <div class="hosts-grid">${hostsHtml}</div>
+        `;
         container.appendChild(netBox);
     }
 }
@@ -163,6 +174,8 @@ async function loadHoneytokens() {
         if (tokenType.includes("Database")) typeClass = "type-database";
         else if (tokenType.includes("Account")) typeClass = "type-account";
         else if (tokenType.includes("API")) typeClass = "type-api";
+        else if (tokenType.includes("PLC") || tokenType.includes("Modbus")) typeClass = "type-database";
+
         tr.innerHTML = `
             <td style="font-family: var(--font-mono); font-weight: bold; color: var(--primary);">${escapeHTML(t.token_id)}</td>
             <td><span class="token-type-pill ${typeClass}">${escapeHTML(tokenType)}</span></td>
@@ -174,9 +187,34 @@ async function loadHoneytokens() {
     });
 }
 
-// 4. Load and organize the live incidents feed
-let allIncidentsCache = [];
+// 4. Interactive Attack Path Graph
+function updateAttackGraph(incident) {
+    if (!incident) return;
 
+    // Reset all nodes
+    document.querySelectorAll(".graph-node-box").forEach(node => {
+        if (!node.id.includes("sec-mon01")) {
+            node.classList.remove("node-traversed");
+        }
+    });
+
+    const traversed = incident.hosts_traversed || [incident.source_workstation];
+    traversed.forEach(h => {
+        const cleanName = String(h).split(".")[0].trim();
+        const nodeEl = document.getElementById(`node-${cleanName}`);
+        if (nodeEl) {
+            nodeEl.classList.add("node-traversed");
+        }
+    });
+
+    // Update banner text
+    const display = document.getElementById("graph-path-display");
+    if (display) {
+        display.innerHTML = traversed.map(h => `<strong style="color: #f87171;">${escapeHTML(h)}</strong>`).join(" &rarr; ");
+    }
+}
+
+// 5. Load Live Incidents Feed
 function incidentTimestamp(incident) {
     const parsed = Date.parse(incident.timestamp || "");
     return Number.isFinite(parsed) ? parsed : 0;
@@ -224,10 +262,14 @@ function renderIncidents() {
         card.tabIndex = 0;
         card.setAttribute("role", "button");
         card.setAttribute("aria-label", `Open incident ${inc.incident_id}`);
-        card.addEventListener("click", () => openForensicModal(inc.incident_id));
+        card.addEventListener("click", () => {
+            updateAttackGraph(inc);
+            openForensicModal(inc.incident_id);
+        });
         card.addEventListener("keydown", event => {
             if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
+                updateAttackGraph(inc);
                 openForensicModal(inc.incident_id);
             }
         });
@@ -240,10 +282,18 @@ function renderIncidents() {
         ).join(" ");
         const timestamp = inc.timestamp ? new Date(inc.timestamp).toLocaleString() : "Time unavailable";
 
+        const hasSoar = inc.soar_actions && inc.soar_actions.length > 0;
+        const soarBadge = hasSoar
+            ? `<span class="badge-tag" style="background: rgba(239, 68, 68, 0.25); color: #f87171; font-weight: bold;">⚡ SOAR Auto-Contained</span>`
+            : "";
+
         card.innerHTML = `
             <div class="inc-top-bar">
                 <span class="inc-id">⚡ ${escapeHTML(inc.incident_id)}</span>
-                <span class="severity-badge ${sevClass}">${escapeHTML(safeSeverity)} (${escapeHTML(inc.score ?? 0)}/100)</span>
+                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                    ${soarBadge}
+                    <span class="severity-badge ${sevClass}">${escapeHTML(safeSeverity)} (${escapeHTML(inc.score ?? 0)}/100)</span>
+                </div>
             </div>
             <p class="inc-summary">${escapeHTML(inc.forensics?.synthesis_en || "Suspicious activity detected violating access policy")}</p>
             <div class="inc-meta-row">
@@ -252,9 +302,22 @@ function renderIncidents() {
                 <span class="inc-meta-item">💻 Workstation: <strong>${escapeHTML(inc.source_workstation)}</strong></span>
                 <span class="inc-meta-item">📋 Rules: ${rulesBadges}</span>
             </div>
-            <div class="incident-timestamp">${escapeHTML(timestamp)}</div>`;
+            <div class="incident-actions-row" onclick="event.stopPropagation()">
+                <a href="/incident/${encodeURIComponent(inc.incident_id)}/report" target="_blank" class="btn-incident-action btn-incident-report">
+                    <span>📄</span> Export Forensic Report (PDF)
+                </a>
+                <a href="/api/incidents/${encodeURIComponent(inc.incident_id)}/pcap" class="btn-incident-action btn-incident-pcap">
+                    <span>💾</span> Download PCAP (Wireshark)
+                </a>
+            </div>
+            <div class="incident-timestamp" style="margin-top: 0.5rem;">${escapeHTML(timestamp)}</div>`;
         container.appendChild(card);
     });
+
+    // Initialize graph with top incident if available
+    if (incidents.length > 0) {
+        updateAttackGraph(incidents[0]);
+    }
 }
 
 async function loadIncidents() {
@@ -264,13 +327,149 @@ async function loadIncidents() {
     renderIncidents();
 }
 
-// 5. Trigger Single Scenario
+// 6. SOAR Active Containment Management
+async function loadSoarStatus() {
+    try {
+        const data = await fetchJSON("/api/soar/status");
+        const hostsList = document.getElementById("soar-hosts-list");
+        const accountsList = document.getElementById("soar-accounts-list");
+        const hostsCount = document.getElementById("soar-hosts-count");
+        const accountsCount = document.getElementById("soar-accounts-count");
+        const graphIndicator = document.getElementById("graph-soar-indicator");
+
+        if (hostsCount) hostsCount.textContent = `${data.total_isolated_hosts} Isolated`;
+        if (accountsCount) accountsCount.textContent = `${data.total_locked_accounts} Locked`;
+
+        if (graphIndicator) {
+            graphIndicator.textContent = data.total_isolated_hosts > 0
+                ? `🚨 ${data.total_isolated_hosts} Host(s) in Perimeter Quarantine`
+                : `Active Defense: Zero Isolations`;
+            graphIndicator.style.color = data.total_isolated_hosts > 0 ? "#f87171" : "var(--text-secondary)";
+        }
+
+        // Render Quarantined Hosts
+        if (hostsList) {
+            if (data.isolated_hosts.length === 0) {
+                hostsList.innerHTML = `<p style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">No hosts currently quarantined.</p>`;
+            } else {
+                hostsList.innerHTML = "";
+                data.isolated_hosts.forEach(h => {
+                    const row = document.createElement("div");
+                    row.className = "soar-item-row";
+                    row.innerHTML = `
+                        <div>
+                            <strong style="color: #f87171; font-family: var(--font-mono);">🚫 ${escapeHTML(h.target)}</strong>
+                            <br><small style="color: var(--text-muted);">${escapeHTML(h.reason)}</small>
+                        </div>
+                        <button class="btn-soar-action" onclick="soarUnisolateHost('${escapeHTML(h.target)}')">Un-quarantine</button>
+                    `;
+                    hostsList.appendChild(row);
+                });
+            }
+        }
+
+        // Render Locked Accounts
+        if (accountsList) {
+            if (data.locked_accounts.length === 0) {
+                accountsList.innerHTML = `<p style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">No accounts currently locked.</p>`;
+            } else {
+                accountsList.innerHTML = "";
+                data.locked_accounts.forEach(a => {
+                    const row = document.createElement("div");
+                    row.className = "soar-item-row";
+                    row.innerHTML = `
+                        <div>
+                            <strong style="color: #fca5a5; font-family: var(--font-mono);">🔒 ${escapeHTML(a.target)}</strong>
+                            <br><small style="color: var(--text-muted);">${escapeHTML(a.reason)}</small>
+                        </div>
+                        <button class="btn-soar-action" onclick="soarUnlockAccount('${escapeHTML(a.target)}')">Restore Account</button>
+                    `;
+                    accountsList.appendChild(row);
+                });
+            }
+        }
+    } catch (err) {
+        console.error("Failed to load SOAR status:", err);
+    }
+}
+
+async function soarUnisolateHost(host) {
+    try {
+        await fetchJSON("/api/soar/unisolate", {
+            method: "POST",
+            body: JSON.stringify({ host })
+        });
+        showToast(`✅ Host [${host}] released from quarantine.`);
+        await loadSoarStatus();
+    } catch (err) {
+        showToast(`Failed to release host ${host}`, true);
+    }
+}
+
+async function soarUnlockAccount(username) {
+    try {
+        await fetchJSON("/api/soar/unlock_account", {
+            method: "POST",
+            body: JSON.stringify({ username })
+        });
+        showToast(`✅ User account [${username}] unlocked and restored.`);
+        await loadSoarStatus();
+    } catch (err) {
+        showToast(`Failed to unlock account ${username}`, true);
+    }
+}
+
+// 7. Load MITRE ATT&CK Matrix & Heatmap
+async function loadMitreMatrix() {
+    try {
+        const data = await fetchJSON("/api/mitre/matrix");
+        const container = document.getElementById("mitre-grid-container");
+        if (!container) return;
+
+        const catalog = data.catalog || [];
+        container.innerHTML = "";
+
+        catalog.forEach(tech => {
+            const card = document.createElement("div");
+            card.className = `mitre-card mitre-intensity-${tech.intensity}`;
+
+            const icsBadge = tech.matrix === "ICS" ? `<span class="mitre-tag-ics">ICS/OT</span>` : "";
+            const countBadge = tech.hit_count > 0
+                ? `<span class="badge-tag" style="background: rgba(239, 68, 68, 0.25); color: #f87171; font-weight: bold;">${tech.hit_count} Hits</span>`
+                : `<span class="badge-tag" style="opacity: 0.6;">0 Hits</span>`;
+
+            card.innerHTML = `
+                <div>
+                    <div class="mitre-card-header">
+                        <span class="mitre-id-pill">${escapeHTML(tech.id)}</span>
+                        <div style="display: flex; gap: 0.35rem; align-items: center;">
+                            ${icsBadge}
+                            ${countBadge}
+                        </div>
+                    </div>
+                    <strong style="font-size: 0.9rem; color: #f8fafc; display: block; margin-top: 0.3rem;">${escapeHTML(tech.name)}</strong>
+                    <small style="color: var(--primary); display: block; margin-top: 0.15rem; font-size: 0.78rem;">${escapeHTML(tech.tactic)}</small>
+                    <p style="color: var(--text-muted); font-size: 0.78rem; margin-top: 0.4rem; line-height: 1.4;">${escapeHTML(tech.description)}</p>
+                </div>
+                <div style="margin-top: 0.6rem; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 0.4rem; font-size: 0.74rem; color: #94a3b8;">
+                    <strong>Remediation:</strong> ${escapeHTML(tech.remediation)}
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    } catch (err) {
+        console.error("Failed to load MITRE matrix:", err);
+    }
+}
+
+// 8. Trigger Threat Scenario Simulator
 async function triggerScenario(type) {
-    showToast(`🚀 Simulating [${type}] scenario...`);
+    showToast(`🚀 Simulating [${type}] threat scenario...`);
     try {
         const data = await fetchJSON(`/api/simulate/${encodeURIComponent(type)}`, { method: "POST" });
 
         if (data.result) {
+            updateAttackGraph(data.result);
             if (data.result.alert_generated) {
                 showToast(`🚨 Threat Detected! Score: ${data.result.score}/100 [${data.result.severity}]`);
             } else {
@@ -284,7 +483,7 @@ async function triggerScenario(type) {
     }
 }
 
-// 6. Run Academic Benchmark (100 Scenarios)
+// 9. Run Academic Benchmark (100 Scenarios)
 async function runAcademicBenchmark() {
     const btn = document.getElementById("btn-run-benchmark");
     btn.disabled = true;
@@ -293,7 +492,6 @@ async function runAcademicBenchmark() {
 
     try {
         const data = await fetchJSON("/api/benchmark/run", { method: "POST" });
-
         renderBenchmarkReport(data);
         showToast("🎉 100-scenario benchmark completed successfully!");
     } catch (err) {
@@ -342,7 +540,7 @@ function closeBenchmarkBox() {
     document.getElementById("benchmark-results-box").style.display = "none";
 }
 
-// 7. Forensic Modal Logic
+// 10. Forensic Modal Logic
 function openForensicModal(incidentId) {
     const inc = allIncidentsCache.find(i => i.incident_id === incidentId);
     if (!inc) return;
@@ -377,6 +575,21 @@ function openForensicModal(incidentId) {
         `;
     });
 
+    // MITRE details
+    const mitreList = forensics.mitre_att_ck_details || [];
+    let mitreHtml = "";
+    mitreList.forEach(m => {
+        mitreHtml += `
+            <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); padding: 0.6rem 0.8rem; border-radius: 8px; margin-bottom: 0.4rem; font-size: 0.82rem;">
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: #a78bfa; font-family: var(--font-mono); font-weight: bold;">${escapeHTML(m.id)}: ${escapeHTML(m.name)}</span>
+                    <span class="badge-tag" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">${escapeHTML(m.matrix)}</span>
+                </div>
+                <div style="color: var(--text-muted); font-size: 0.76rem; margin-top: 0.2rem;">${escapeHTML(m.remediation)}</div>
+            </div>
+        `;
+    });
+
     const timeline = forensics.events_timeline || [];
     let timelineHtml = "";
     timeline.forEach((ev, i) => {
@@ -401,6 +614,20 @@ function openForensicModal(incidentId) {
             </div>
         </div>
 
+        <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+            <a href="/incident/${encodeURIComponent(inc.incident_id)}/report" target="_blank" class="btn-gradient" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem 1.2rem; font-size: 0.88rem;">
+                <span>📄</span> Export Official CSIRT Report (PDF)
+            </a>
+            <a href="/api/incidents/${encodeURIComponent(inc.incident_id)}/pcap" class="btn-gradient" style="background: #059669; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem 1.2rem; font-size: 0.88rem;">
+                <span>💾</span> Download Raw PCAP (Wireshark)
+            </a>
+        </div>
+
+        <h4 style="margin-top: 1.2rem; color: #a78bfa; font-size: 1rem;">MITRE ATT&CK&reg; Threat Alignment:</h4>
+        <div style="margin-top: 0.5rem;">
+            ${mitreHtml || "<p style='color: var(--text-muted); font-size: 0.85rem;'>Standard Enterprise Baseline.</p>"}
+        </div>
+
         <h4 style="margin-top: 1.2rem; color: var(--primary); font-size: 1rem;">Deterministic Rules Triggered:</h4>
         <div class="rules-tree-list">
             ${rulesHtml || "<p style='color: var(--text-muted);'>No deterministic rule violations flagged.</p>"}
@@ -419,7 +646,7 @@ function closeForensicModal() {
     document.getElementById("forensic-modal").style.display = "none";
 }
 
-// 8. Load Captured Credentials Table
+// 11. Load Captured Credentials Table
 async function loadCredentials() {
     const tbody = document.getElementById("credentials-tbody");
     const badge = document.getElementById("creds-count-badge");
@@ -450,5 +677,5 @@ async function loadCredentials() {
     });
 }
 
-// Refresh only while the dashboard is visible; requests never overlap.
+// Refresh only while the dashboard is visible
 setInterval(refreshDashboard, REFRESH_INTERVAL_MS);

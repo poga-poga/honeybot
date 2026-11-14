@@ -5,7 +5,7 @@ Implements Multi-Layer Deception, RBAC Policy Verification, and Lateral Movement
 import uuid
 import time
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from factoryshield.enterprise.rbac import evaluate_access, get_user
 from factoryshield.enterprise.company import get_host_by_name, get_host_by_ip
@@ -13,6 +13,7 @@ from factoryshield.honeytokens.manager import honeytoken_mgr
 from factoryshield.engine.rules import RuleEvaluationResult, RULES_METADATA
 from factoryshield.engine.scoring import ScoringEngine
 from factoryshield.engine.explainability import ExplainabilityEngine
+from factoryshield.engine.soar import soar_engine
 
 class FactoryShieldDetector:
     def __init__(self):
@@ -221,7 +222,7 @@ class FactoryShieldDetector:
         incident_entry = {
             "incident_id": incident_id,
             "session_id": session_id,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "alert_generated": alert_generated,
             "score": score_info["score"],
             "severity": score_info["severity_level"],
@@ -236,10 +237,13 @@ class FactoryShieldDetector:
             "source_workstation": initial_host,
             "hosts_traversed": hosts_traversed,
             "detection_time_ms": elapsed_ms,
-            "forensics": forensic_report
+            "forensics": forensic_report,
+            "soar_actions": []
         }
 
         if alert_generated:
+            soar_actions = soar_engine.evaluate_and_contain(incident_entry)
+            incident_entry["soar_actions"] = soar_actions
             self.incidents_history.insert(0, incident_entry)
 
         return incident_entry

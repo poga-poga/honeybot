@@ -17,7 +17,7 @@
             "recall": 95.0,
             "f1_score": 89.76,
             "false_positive_rate": 25.0,
-            "avg_detection_time_ms": 0.004
+            "avg_detection_time_ms": 0.007
         },
         "factoryshield_correlated": {
             "TP": 60,
@@ -28,7 +28,7 @@
             "recall": 100.0,
             "f1_score": 100.0,
             "false_positive_rate": 0.0,
-            "avg_detection_time_ms": 0.044
+            "avg_detection_time_ms": 0.092
         }
     },
     "detailed_runs": [

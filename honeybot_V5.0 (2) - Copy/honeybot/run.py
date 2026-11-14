@@ -14,6 +14,7 @@ from factoryshield.services.ssh_trap import start_ssh_trap_thread
 from factoryshield.services.ftp_trap import start_ftp_trap_thread
 from factoryshield.services.plc_trap import start_plc_trap_thread
 from factoryshield.services.production_hmi import start_hmi_thread
+from factoryshield.services.modbus_trap import start_modbus_trap_thread
 
 def print_banner():
     banner = r"""
@@ -37,6 +38,7 @@ def print_banner():
         print(f"    - {net['name']:<35} [{net['subnet']}] : {len(net['hosts'])} hosts")
     
     print("\n[+] Launching Network Decoy Trap Services:")
+    print("    - Port 502/5502: Native Modbus TCP PLC S7-1200   (modbus://localhost:502)")
     print("    - Port 8080: Production HMI Dashboard (SCADA)    (http://localhost:8080)")
     print("    - Port 8088: CAD Web Vault & Blueprint Traps     (http://localhost:8088)")
     print("    - Port 5020: Siemens S7 PLC Diagnostic Portal    (http://localhost:5020)")
@@ -45,6 +47,7 @@ def print_banner():
 
     print("\n[+] Isolated Security Monitoring Network (Forensics SOC):")
     print("    - Port 5000: FactoryShield Dashboard & Forensics  (http://localhost:5000)")
+    print(f"      👉 Admin Login: Username: '{app.config['ADMIN_USERNAME']}' | Password: [from env or default 'admin123']")
     print("========================================================================================\n")
 
 if __name__ == "__main__":
@@ -58,6 +61,7 @@ if __name__ == "__main__":
     print_banner()
 
     # Start Decoy Trap Services in background daemon threads
+    start_modbus_trap_thread(host="0.0.0.0", port=502)
     start_hmi_thread(host="0.0.0.0", port=8080)
     start_cad_web_trap_thread(host="0.0.0.0", port=8088)
     start_plc_trap_thread(host="0.0.0.0", port=5020)

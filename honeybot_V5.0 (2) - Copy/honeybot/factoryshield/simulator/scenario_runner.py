@@ -3,7 +3,7 @@ Attack & Enterprise Activity Scenarios
 Jordan Industrial Manufacturing (JIM)
 """
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 
 def create_event(
@@ -17,7 +17,7 @@ def create_event(
     api_key: str = "",
     offset_seconds: int = 0
 ) -> Dict[str, Any]:
-    timestamp = (datetime.utcnow() + timedelta(seconds=offset_seconds)).isoformat() + "Z"
+    timestamp = (datetime.now(timezone.utc) + timedelta(seconds=offset_seconds)).isoformat() + "Z"
     return {
         "timestamp": timestamp,
         "username": username,
@@ -62,6 +62,19 @@ def build_lateral_movement_scenario(username: str = "a.barakat") -> List[Dict[st
         create_event(username, "WS-IT-01", "cad-srv01.jim.corp", "cad/repo/ssh_session", "connect", offset_seconds=10),
         create_event(username, "cad-srv01.jim.corp", "db-prod01.jim.corp", "production/db/internal_query", "query", offset_seconds=25),
         create_event(username, "db-prod01.jim.corp", "plc-sim01.jim.corp", "ot/plc/hold_registers", "modbus_read", offset_seconds=40),
+    ]
+
+def build_modbus_ics_scenario(username: str = "w.abdallah_consultant") -> List[Dict[str, Any]]:
+    """
+    Scenario D: ICS/SCADA Modbus Process Tampering & Canary Trigger
+    Compromised consultant account pivots into Production tier, probes Modbus TCP port 502,
+    touches Canary Register 40108, and attempts unauthorized coil override on Line 07.
+    """
+    return [
+        create_event(username, "WS-ENG-01", "cad-srv01.jim.corp", "cad/configs/network_map.json", "read", offset_seconds=0),
+        create_event(username, "cad-srv01.jim.corp", "plc-sim01.jim.corp", "plc-sim01.jim.corp:502/modbus/holding_registers", "modbus_read", offset_seconds=12),
+        create_event(username, "cad-srv01.jim.corp", "plc-sim01.jim.corp", "plc-sim01.jim.corp:Modbus_Reg_40108_Safety_Override", "read", offset_seconds=22),
+        create_event(username, "cad-srv01.jim.corp", "plc-sim01.jim.corp", "plc-sim01.jim.corp:PLC_Coil_Write_Tamper", "unauthorized_modbus_write", offset_seconds=35),
     ]
 
 def build_normal_activity_scenario(dept: str = "Engineering") -> List[Dict[str, Any]]:

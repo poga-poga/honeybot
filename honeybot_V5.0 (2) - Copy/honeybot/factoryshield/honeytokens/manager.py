@@ -90,6 +90,16 @@ class HoneytokenManager:
                 description_en="Decoy API token embedded in fake application config",
                 classification="API Key Deception"
             ),
+            # Industrial PLC Modbus Canary
+            "PLC_CANARY_MODBUS_01": Honeytoken(
+                token_id="PLC_CANARY_MODBUS_01",
+                token_type="Industrial PLC Canary",
+                identifier="MODBUS_HOLDING_REG_40108_EMERGENCY_OVERRIDE",
+                asset_location="plc-sim01.jim.corp:502 (Modbus TCP S7-1200)",
+                description_ar="سجل Modbus وهمي لأقفال أمان خط الإنتاج 07 لا يُستخدم في العمليات الطبيعية",
+                description_en="Decoy Modbus holding register for hydraulic emergency override",
+                classification="OT/ICS Safety Critical"
+            ),
         }
 
     def inspect_event_for_honeytoken(self, resource: str, query: str = "", username: str = "", api_key: str = "") -> Optional[Honeytoken]:
@@ -119,6 +129,10 @@ class HoneytokenManager:
         for token in self.tokens.values():
             if token.token_type == "Database Canary" and token.identifier.lower() in combined_text:
                 return token
+
+        # Check Industrial PLC / Modbus Canary
+        if "40108" in combined_text or "safety_override" in combined_text or "modbus_reg" in combined_text or "plc_coil" in combined_text:
+            return self.tokens.get("PLC_CANARY_MODBUS_01")
 
         return None
 
